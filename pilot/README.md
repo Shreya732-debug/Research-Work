@@ -6,6 +6,7 @@ The [44-page final proposal](../deliverables/final_proposal.pdf) remains the blu
 
 ## Start here
 
+- **New to financial filings?** Start with [six-case calibration](calibration/README.md): detailed beginner instructions, two practice worksheets, a separate answer key and a later 24-case review pack.
 - **Project owner:** [hands-on steps](user_hands_on.md) and [pilot assessment](pilot_assessment.md).
 - **Independent reviewer:** [download the reviewer pack](https://raw.githubusercontent.com/Shreya732-debug/Research-Work/main/pilot/reviewer_pack.zip). It omits provisional answers, analyst reasons and baseline outputs. Send this pack before the reviewer reads the rest of the repository; record any prior exposure.
 - **Full archive:** [download the pilot bundle](https://raw.githubusercontent.com/Shreya732-debug/Research-Work/main/pilot/pilot_bundle.zip), including draft labels and analysis. Do not send it to a reviewer before their first pass.

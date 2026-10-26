@@ -1,6 +1,8 @@
 # Your practical next steps
 
-Updated 26 October 2026. Keep the final proposal as the blueprint. The current deliverable is a **30-case draft pilot across five issuers**, with original-source links and a manual comparison of reference rules. No verifier has been built, no model experiment has run, and no independent human review has been completed.
+Updated 26 October 2026. Keep the final proposal as the blueprint. The pilot contains **30 draft cases across five issuers**, with original-source links and a manual comparison of reference rules. A separate supervisor-demo package now implements the reference verifier; it does not supply independent validation or LLM experiment results. No independent human review has been completed in these records.
+
+**If you are B.Tech students without a financial expert, start with the [six-case calibration pack](calibration/README.md).** It provides beginner instructions, separate practice worksheets and a later 24-case review pack. This route supersedes the earlier expert-first guidance below; a qualified reviewer remains helpful for unresolved accounting issues.
 
 ## 1. Download the review pack
 
@@ -10,7 +12,7 @@ If the link opens a GitHub preview instead, use **Download raw file**. The separ
 
 ## 2. Arrange the independent review — your hands-on task
 
-Ask your faculty supervisor, a finance/accounting faculty member, or another person competent in reading financial statements to review the pack. A friend who can only match numbers is insufficient for attribution, restatement and non-reliance questions. If you cannot find a qualified reviewer, tell your supervisor that the pilot is awaiting review; do not substitute an AI answer for independent human validation.
+For the student route, assign two reviewers, complete the six-case calibration, then have both independently review the remaining 24 cases using the same instructions. They must check captions, periods, units and applicable notices, not merely match numbers. Financial qualifications are not a prerequisite to this limited task. Record training and prior answer exposure, and leave questions requiring unavailable accounting expertise unresolved or exclude them with a reason. Do not substitute an AI answer for independent human validation. If available, a faculty member or competent financial-statement reader can provide additional review.
 
 You can send this message yourself:
 
@@ -50,4 +52,4 @@ The immediate scientific decision is whether the data support a distinctive benc
 
 I can expand the candidate-source screening, inspect closer literature and available benchmark releases, maintain the evidence and adjudication records, and design the next comparison. Those are research tasks, not work you need to do manually because I cannot access a person. The broader acquisition target is still 20 eligible correction families across at least 10 issuers; the current five families do not satisfy it.
 
-Do not start the proposed 600-claim collection, pay for model APIs, train a model or install a research software stack yet. After the pilot review and broader screening gate, we can freeze the evaluation contract and decide what implementation is justified. **Your immediate action is to arrange one competent independent review and return the completed worksheet.**
+Do not start the proposed 600-claim collection, pay for model APIs or train a model yet. After pilot review and broader screening, we can freeze the evaluation contract and decide what further implementation is justified. **For beginners, the immediate action is to complete the six-case calibration and return the preserved first attempts and discussion records.**

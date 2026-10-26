@@ -18,6 +18,8 @@ Research proposal and source audits for **Financial Claims Under Revision: An As
 
 **The 30-case pilot draft is ready for independent review:** see [pilot status](pilot/README.md), [your hands-on steps](pilot/user_hands_on.md), and [download the reviewer pack](https://raw.githubusercontent.com/Shreya732-debug/Research-Work/main/pilot/reviewer_pack.zip). It covers five issuers and 11 SEC filings. The final proposal remains the blueprint. Labels are provisional; no model experiment or independently measured performance is claimed.
 
+**Beginner starting point:** [six-case calibration guide and download](pilot/calibration/README.md). Two students can learn the narrow evidence-checking protocol before separately reviewing the other 24 pilot cases; a financial expert is not required to begin this practice.
+
 The proposal evaluates financial claims under original, historical, and corrected filing-authority policies. It combines the financial-evidence idea with temporal leakage controls and statistical safeguards from the other supplied documents.
 
 This is a research proposal, not a report of completed experiments. Unverified references, conflicting metadata, dataset limitations, and regulatory-source discrepancies are recorded explicitly.
