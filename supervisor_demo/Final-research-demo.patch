@@ -1,0 +1,834 @@
+From 447dc726e5c6195163885e2d39e87db11173c4ca Mon Sep 17 00:00:00 2001
+From: Soumya Garg <soumya30garg@gmail.com>
+Date: Mon, 26 Oct 2026 13:59:09 +0000
+Subject: [PATCH] Add supervisor verifier demo with evidence traces and cutoff
+ safeguards
+
+---
+ README.md                               |   2 +
+ code/4_SUPERVISOR_DEMO.bat              |   6 +
+ code/README.md                          |   2 +
+ code/supervisor_demo.py                 | 144 ++++++++++++++++++++++++
+ code/tests/test_supervisor_demo.py      | 102 +++++++++++++++++
+ code/verifier.py                        |  93 ++++++++++++---
+ deliverables/supervisor_demo_bundle.zip | Bin 0 -> 16336 bytes
+ docs/4_SUPERVISOR_DEMO.md               |  66 +++++++++++
+ 8 files changed, 399 insertions(+), 16 deletions(-)
+ create mode 100644 code/4_SUPERVISOR_DEMO.bat
+ create mode 100644 code/supervisor_demo.py
+ create mode 100644 code/tests/test_supervisor_demo.py
+ create mode 100644 deliverables/supervisor_demo_bundle.zip
+ create mode 100644 docs/4_SUPERVISOR_DEMO.md
+
+diff --git a/README.md b/README.md
+index 2f52e71..d8ff155 100644
+--- a/README.md
++++ b/README.md
+@@ -2,6 +2,8 @@
+ 
+ Research proposal and source audits for **Financial Claims Under Revision: An As-of and Authority-Conditioned Verification Benchmark**.
+ 
++**Supervisor demo:** [run the local Disclosure Verifier](docs/4_SUPERVISOR_DEMO.md). Change the disclosure policy and cutoff for a prepared claim and inspect its verdict and evidence trace. Windows: `code/4_SUPERVISOR_DEMO.bat`. No API key or extra Python packages required. This is a deterministic reference prototype on provisional pilot evidence, not a newly trained model or a validated accuracy result.
++
+ ## Start here (added 26 October 2026)
+ 
+ | File | What it is |
+diff --git a/code/4_SUPERVISOR_DEMO.bat b/code/4_SUPERVISOR_DEMO.bat
+new file mode 100644
+index 0000000..b777266
+--- /dev/null
++++ b/code/4_SUPERVISOR_DEMO.bat
+@@ -0,0 +1,6 @@
++@echo off
++cd /d "%~dp0"
++echo Opening the local Disclosure Verifier demo. Keep this window open.
++echo No API key or extra Python packages are required.
++python supervisor_demo.py
++pause
+diff --git a/code/README.md b/code/README.md
+index fa8df90..2ce63e1 100644
+--- a/code/README.md
++++ b/code/README.md
+@@ -1,5 +1,7 @@
+ # Code: verifying financial claims across original and corrected filings
+ 
++**New supervisor demo:** double-click `4_SUPERVISOR_DEMO.bat` to open a local browser interface with policy/cutoff controls, S/C/U verdicts and source traces. It needs Python 3.11+ but no third-party packages, API key or model download. Read [the walkthrough and limitations](../docs/4_SUPERVISOR_DEMO.md). The existing automatic dataset and bare/full experiment still require the corrections documented there before research use.
++
+ You don't need to know Python to use this. Each step is a `.bat` file you double-click in Windows Explorer. A black window opens, runs the step and waits for you to press a key.
+ 
+ **One-time setup:** Python 3.11 is already installed on this laptop. If you use another computer, install Python from [python.org](https://www.python.org/downloads/) and tick **"Add Python to PATH"** during installation. Then open a terminal in this folder and run `pip install -r requirements.txt` once.
+diff --git a/code/supervisor_demo.py b/code/supervisor_demo.py
+new file mode 100644
+index 0000000..fae2a7f
+--- /dev/null
++++ b/code/supervisor_demo.py
+@@ -0,0 +1,144 @@
++"""Local, standard-library-only supervisor demo on prepared pilot evidence."""
++import argparse
++from datetime import date
++import html
++from http.server import BaseHTTPRequestHandler, HTTPServer
++import json
++from pathlib import Path
++from urllib.parse import parse_qs, urlencode, urlparse
++import webbrowser
++
++from common import load_dataset
++from verifier import resolve_reference, run_rule
++
++POLICIES = {
++    'original_as_filed': 'Original report as filed',
++    'corrected_named': 'Named corrected report',
++    'as_known_packet': 'Active evidence at the cutoff',
++    'unspecified': 'Version unspecified',
++    'explicit_display_comparison': 'Displayed-value arithmetic',
++}
++NAMES = {'S': 'Supported', 'C': 'Contradicted', 'U': 'Underdetermined'}
++SCENARIOS = [
++    ('Original report', 'P013', 'original_as_filed', '2023-12-19'),
++    ('Corrected report', 'P013', 'corrected_named', '2023-12-19'),
++    ('Before withdrawal', 'P013', 'as_known_packet', '2023-10-18'),
++    ('Withdrawal gap', 'P013', 'as_known_packet', '2023-10-25'),
++    ('After replacement', 'P013', 'as_known_packet', '2023-12-19'),
++    ('Rounding challenge', 'P018', 'corrected_named', '2023-12-19'),
++]
++
++
++def evaluate(case_id='P013', policy=None, cutoff=None):
++    documents, facts, cases = load_dataset('pilot')
++    matches = [c for c in cases if c['case_id'] == case_id]
++    if not matches:
++        raise ValueError('Choose one of the 30 pilot case IDs.')
++    claim = dict(matches[0])
++    if policy:
++        if policy not in POLICIES:
++            raise ValueError('Unknown authority policy.')
++        if (policy == 'explicit_display_comparison') != (claim['policy'] == 'explicit_display_comparison'):
++            raise ValueError('Arithmetic cases require their explicit two-document comparison policy.')
++        claim['policy'] = policy
++    if cutoff:
++        claim['cutoff_date'] = date.fromisoformat(cutoff).isoformat()
++    result = resolve_reference(claim, documents, facts)
++    result['simple_control_label'] = run_rule('B4W', claim, documents, facts)
++    # Exclude proposed labels from the demo response. They are not independent truth.
++    public_claim = {k: v for k, v in claim.items() if k not in ('gold_label', 'label_source', 'template')}
++    return public_claim, result, cases
++
++
++def page(case_id='P013', policy=None, cutoff=None):
++    claim, result, cases = evaluate(case_id, policy, cutoff)
++    esc = lambda value: html.escape(str(value), quote=True)
++    options = ''.join(f'<option value="{esc(c["case_id"])}" {"selected" if c["case_id"] == case_id else ""}>{esc(c["case_id"])} — {esc(c["issuer"])}</option>' for c in cases)
++    choices = {'explicit_display_comparison': POLICIES['explicit_display_comparison']} if claim['policy'] == 'explicit_display_comparison' else {k:v for k,v in POLICIES.items() if k != 'explicit_display_comparison'}
++    policies = ''.join(f'<option value="{k}" {"selected" if k == claim["policy"] else ""}>{v}</option>' for k,v in choices.items())
++    links = ''.join(f'<a class="button" href="?{urlencode(dict(case=c, policy=p, cutoff=d))}">{esc(title)}</a>' for title,c,p,d in SCENARIOS)
++    doc_rows = ''
++    for d in result['documents']:
++        status = 'Eligible' if d['eligible'] else 'Excluded: filed on/after cutoff'
++        if d['withdrawn']:
++            status += '; withdrawn for active-authority questions'
++        url = d['url']
++        if urlparse(url).scheme != 'https':
++            raise ValueError('Evidence links must use HTTPS.')
++        doc_rows += f'<tr><td><a href="{esc(url)}" target="_blank" rel="noopener noreferrer">{esc(d["doc_id"])}</a></td><td>{esc(d["filing_date"])}</td><td>{esc(status)}</td></tr>'
++    fact_rows = ''.join(f'<tr><td>{esc(f["fact_id"])} / {esc(f["doc_id"])}</td><td>{esc(f["value"])}</td><td>{esc(f["unit"])}</td><td>{"Selected" if f["selected"] else "Not selected"}</td></tr>' for f in result['facts'])
++    intervals = '; '.join('[' + ', '.join(pair) + ']' for pair in result['evidence_intervals']) or 'None'
++    return f'''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
++<title>Disclosure Verifier — supervisor demo</title><style>
++body{{font:16px/1.55 system-ui,sans-serif;background:#f3f6fa;color:#17253b;max-width:1050px;margin:36px auto;padding:0 20px}}
++h1{{font-size:32px;margin-bottom:4px}} .sub{{color:#526176}} section{{background:white;border:1px solid #d9e2ed;border-radius:12px;padding:22px;margin:18px 0}}
++label{{display:inline-block;margin:0 16px 12px 0}}select,input,button{{font:inherit;padding:8px;border:1px solid #a6b5c8;border-radius:5px;max-width:100%}}
++button,.button{{background:#173f70;color:white;text-decoration:none;cursor:pointer}}.button{{display:inline-block;padding:7px 12px;margin:4px;border-radius:5px}}
++table{{border-collapse:collapse;width:100%;font-size:14px}}td,th{{padding:10px;border-bottom:1px solid #d9e2ed;text-align:left}}th{{background:#eef3f9}}
++.verdict{{font-size:26px;font-weight:700}}.S{{color:#176041}}.C{{color:#a12727}}.U{{color:#855600}}.note{{border-left:4px solid #b98520;padding-left:14px}} a{{color:#174f8d}}code{{overflow-wrap:anywhere}}
++</style><h1>Disclosure Verifier</h1><p class="sub">Research prototype · 30 prepared pilot claims · no model API or training required</p>
++<p class="note">This deterministic reference verifier operates on prepared facts and correction links. Their annotations remain provisional. It does not extract facts from raw filings or establish model accuracy.</p>
++<section><h2>Guided SunPower demonstration</h2><p>The first five buttons keep the same claim and change only the policy or cutoff.</p>{links}</section>
++<section><h2>Explore a case</h2><form method="get"><label>Claim<br><select name="case" onchange="location.href='?case='+encodeURIComponent(this.value)">{options}</select></label>
++<label>Disclosure policy<br><select name="policy">{policies}</select></label><label>Cutoff date<br><input type="date" required name="cutoff" value="{esc(claim['cutoff_date'])}"></label><button>Verify</button></form>
++<p><strong>{esc(claim['case_id'])}:</strong> {esc(claim['claim'])}</p><p>Period: {esc(claim['period_start'])} to {esc(claim['period_end'])}. Metric: {esc(claim['metric'])}.</p></section>
++<section><div class="verdict {result['label']}">{result['label']} — {NAMES[result['label']]}</div><p>{esc(result['reason'])}</p>
++<p>Simple withdrawal-aware control: <strong>{NAMES[result['simple_control_label']]}</strong>. Agreement here does not demonstrate superiority.</p>
++<p>Claim interval: <code>{esc(result['claim_interval'])}</code>. Selected evidence intervals: <code>{esc(intervals)}</code>. Units follow the normalized facts below.</p></section>
++<section><h2>Evidence trace</h2><p>Eligibility convention: official filing date must be strictly earlier than the cutoff. Same-day evidence is excluded conservatively; this is not a claim about exact dissemination time. Sources are limited to this packet.</p>
++<table><tr><th>Source link</th><th>Filed</th><th>Status</th></tr>{doc_rows}</table><h3>Matching numerical facts</h3><table><tr><th>Fact / source</th><th>Value</th><th>Unit</th><th>Decision input</th></tr>{fact_rows}</table>
++<p>Historical original-as-filed questions may use a withdrawn original to establish what that document reported. Active-authority questions cannot.</p></section>
++<p class="sub">Pilot evidence is assistant-prepared and awaits independent review. Generated claims are research examples, not investment advice. Close the terminal or press Ctrl+C to stop the local demo.</p></html>'''
++
++
++class Handler(BaseHTTPRequestHandler):
++    def do_GET(self):
++        parsed = urlparse(self.path)
++        if parsed.path != '/':
++            self.send_error(404)
++            return
++        q = parse_qs(parsed.query)
++        try:
++            content = page(q.get('case', ['P013'])[0], q.get('policy', [None])[0], q.get('cutoff', [None])[0]).encode()
++        except ValueError as exc:
++            self.send_error(400, str(exc))
++            return
++        self.send_response(200)
++        self.send_header('Content-Type', 'text/html; charset=utf-8')
++        self.send_header('Cache-Control', 'no-store')
++        self.send_header('Content-Length', str(len(content)))
++        self.end_headers()
++        self.wfile.write(content)
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--case', default='P013')
++    parser.add_argument('--policy', choices=POLICIES)
++    parser.add_argument('--cutoff')
++    parser.add_argument('--json', action='store_true', help='Print one reference verdict and trace; do not start the browser')
++    parser.add_argument('--export', type=Path, help='Write an HTML snapshot of this case; interactive controls require the local server')
++    parser.add_argument('--port', type=int, default=8765)
++    parser.add_argument('--no-browser', action='store_true')
++    args = parser.parse_args()
++    if args.json:
++        claim, result, _ = evaluate(args.case, args.policy, args.cutoff)
++        print(json.dumps({'claim': claim, 'result': result}, indent=2, default=str))
++        return
++    if args.export:
++        args.export.write_text(page(args.case, args.policy, args.cutoff), encoding='utf-8')
++        return
++    url = f'http://127.0.0.1:{args.port}/?' + urlencode({k:v for k,v in dict(case=args.case,policy=args.policy,cutoff=args.cutoff).items() if v})
++    with HTTPServer(('127.0.0.1', args.port), Handler) as server:
++        print('Disclosure Verifier: '+url, flush=True)
++        print('Prepared pilot evidence; draft annotations. Ctrl+C stops the demo.', flush=True)
++        if not args.no_browser:
++            webbrowser.open(url)
++        try:
++            server.serve_forever()
++        except KeyboardInterrupt:
++            pass
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/code/tests/test_supervisor_demo.py b/code/tests/test_supervisor_demo.py
+new file mode 100644
+index 0000000..a4b4491
+--- /dev/null
++++ b/code/tests/test_supervisor_demo.py
+@@ -0,0 +1,102 @@
++"""Contract checks, not evidence of benchmark or trained-model accuracy."""
++import copy
++from datetime import date, timedelta
++from pathlib import Path
++import sys
++import unittest
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++from common import load_dataset, read_csv
++from run_rules import compare_with_manual_trace
++from supervisor_demo import evaluate, page, SCENARIOS
++from verifier import RULES, resolve_reference, run_all_rules, run_rule
++
++
++class VerifierContractTests(unittest.TestCase):
++    @classmethod
++    def setUpClass(cls):
++        cls.documents, cls.facts, cls.claims = load_dataset('pilot')
++
++    def case(self, cid, **updates):
++        c = copy.deepcopy(next(c for c in self.claims if c['case_id'] == cid))
++        c.update(updates)
++        return c
++
++    def test_original_pilot_trace_still_reproduced(self):
++        self.assertEqual([], compare_with_manual_trace(run_all_rules(self.claims, self.documents, self.facts)))
++
++    def test_auto_saved_outputs_unchanged_not_validated(self):
++        docs, facts, claims = load_dataset('auto')
++        saved = read_csv(str(Path(__file__).resolve().parents[1] / 'results/rules_auto.csv'))
++        self.assertEqual(saved, run_all_rules(claims, docs, facts))
++
++    def test_named_reports_exclude_future_and_same_day(self):
++        for cid, source in [('P001', 'P19'), ('P002', 'P20')]:
++            for cutoff in ['1900-01-01', self.documents[source]['filing_date']]:
++                c = self.case(cid, cutoff_date=cutoff)
++                for rule in ['B4', 'B4W', 'P']:
++                    with self.subTest(case=cid, cutoff=cutoff, rule=rule):
++                        self.assertEqual('U', run_rule(rule, c, self.documents, self.facts))
++
++    def test_arithmetic_needs_both_eligible_operands(self):
++        for cutoff in ['1900-01-01', '2023-10-13']:
++            c = self.case('P024', cutoff_date=cutoff)
++            for rule in RULES:
++                self.assertEqual('U', run_rule(rule, c, self.documents, self.facts))
++        self.assertEqual('S', run_rule('P', self.case('P024'), self.documents, self.facts))
++
++    def test_same_claim_changes_with_policy_and_cutoff(self):
++        expected = ['S', 'C', 'S', 'U', 'C', 'U']
++        for (_, cid, policy, cutoff), label in zip(SCENARIOS, expected):
++            claim, result, _ = evaluate(cid, policy, cutoff)
++            with self.subTest(case=cid, policy=policy, cutoff=cutoff):
++                self.assertEqual(label, result['label'])
++                self.assertEqual(label, result['simple_control_label'])
++                self.assertNotIn('gold_label', claim)
++
++    def test_unspecified_cannot_ignore_missing_active_interpretation(self):
++        c = self.case('P013', policy='unspecified', cutoff_date='2023-10-25')
++        for rule in ['P', 'B4W']:
++            self.assertEqual('U', run_rule(rule, c, self.documents, self.facts))
++
++    def test_labels_do_not_affect_predictions(self):
++        for c in self.claims:
++            changed = dict(c, gold_label='deliberately incorrect', label_source='test')
++            self.assertEqual(run_rule('P', c, self.documents, self.facts),
++                             run_rule('P', changed, self.documents, self.facts))
++
++    def test_future_documents_cannot_change_as_known_verdict(self):
++        c = self.case('P015')
++        docs, facts = copy.deepcopy(self.documents), copy.deepcopy(self.facts)
++        for f in facts:
++            if docs[f['doc_id']]['filing_date'] >= c['cutoff_date']:
++                f['value'] += 999999
++        self.assertEqual(run_rule('P', c, self.documents, self.facts), run_rule('P', c, docs, facts))
++
++    def test_trace_selected_facts_are_eligible(self):
++        for c in self.claims:
++            for cutoff in ['1900-01-01', c['cutoff_date']]:
++                changed = dict(c, cutoff_date=cutoff)
++                result = resolve_reference(changed, self.documents, self.facts)
++                for f in result['facts']:
++                    if f['selected']:
++                        self.assertLess(self.documents[f['doc_id']]['filing_date'], cutoff)
++
++    def test_no_matching_period_is_underdetermined(self):
++        c = self.case('P013', period_start='1800-01-01', period_end='1800-12-31')
++        self.assertEqual('U', run_rule('P', c, self.documents, self.facts))
++
++    def test_browser_page_escapes_evidence_and_shows_limitations(self):
++        rendered = page('P013', 'as_known_packet', '2023-10-25')
++        self.assertIn('U — Underdetermined', rendered)
++        self.assertIn('Excluded: filed on/after cutoff', rendered)
++        self.assertIn('annotations remain provisional', rendered)
++        self.assertNotIn('gold_label', rendered)
++        with self.assertRaises(ValueError):
++            page('P013', 'as_known_packet', 'not-a-date')
++        with self.assertRaises(ValueError):
++            page('P013', 'explicit_display_comparison')
++
++
++if __name__ == '__main__':
++    unittest.main()
+diff --git a/code/verifier.py b/code/verifier.py
+index 98dd0b5..5877e17 100644
+--- a/code/verifier.py
++++ b/code/verifier.py
+@@ -96,8 +96,9 @@ class Packet:
+     def display_difference(self):
+         """Displayed-value arithmetic for explicit two-document comparisons."""
+         claim = self.claim
+-        new = [f for f in self.facts if f["doc_id"] == claim["operand_new"]]
+-        old = [f for f in self.facts if f["doc_id"] == claim["operand_old"]]
++        pool = self.eligible_facts(claim["cutoff_date"])
++        new = [f for f in pool if f["doc_id"] == claim["operand_new"]]
++        old = [f for f in pool if f["doc_id"] == claim["operand_old"]]
+         if len(new) != 1 or len(old) != 1:
+             return []
+         point = new[0]["value"] - old[0]["value"]
+@@ -108,7 +109,75 @@ def intervals(facts):
+     return [fact_interval(f) for f in facts]
+ 
+ 
++def reference_selection(packet):
++    """One selection path shared by the reference verdict and its explanation."""
++    policy = packet.claim["policy"]
++    cutoff = packet.claim["cutoff_date"]
++    pool = packet.eligible_facts(cutoff)
++    original = [f for f in pool if f["role"] == "original"]
++    if policy == "original_as_filed":
++        return original
++    if policy == "corrected_named":
++        return [f for f in pool if f["role"] == "corrected"]
++    if policy == "as_known_packet":
++        return packet.active_facts(cutoff)
++    if policy == "unspecified":
++        return list({f["fact_id"]: f for f in original + packet.active_facts(cutoff)}.values())
++    if policy == "explicit_display_comparison":
++        return [f for f in pool if f["doc_id"] in
++                (packet.claim["operand_new"], packet.claim["operand_old"])]
++    raise ValueError(f"Unknown policy {policy}")
++
++
++def resolve_reference(claim, documents, facts):
++    """Return a P verdict with a reproducible evidence trace; never read labels.
++
++    Inputs are prepared, normalized pilot facts and reviewed-in-progress links,
++    not raw filings or arbitrary natural-language claims. Dates are conservative
++    day-level eligibility boundaries, not exact public dissemination timestamps.
++    """
++    packet = Packet(claim, documents, facts)
++    selected = reference_selection(packet)
++    bounds = (packet.display_difference() if claim["policy"] == "explicit_display_comparison"
++              else intervals(selected))
++    missing_active_interpretation = (claim["policy"] == "unspecified"
++                                     and not packet.active_facts(claim["cutoff_date"]))
++    if missing_active_interpretation:
++        # An original-only interpretation cannot settle a question that also
++        # permits an active-state interpretation with no available answer.
++        bounds = []
++    label = judge(bounds, claim)
++    reasons = {
++        "S": "All selected evidence intervals lie within the claim interval.",
++        "C": "All selected evidence intervals are disjoint from the claim interval.",
++        "U": "The selected evidence does not establish either support or contradiction.",
++    }
++    reason = reasons[label]
++    if not bounds:
++        reason = "No eligible evidence or complete eligible operand pair establishes the claim."
++        if missing_active_interpretation:
++            reason = "The original-report interpretation is insufficient: the allowed active-state interpretation has no eligible matching evidence."
++        if claim["policy"] == "as_known_packet" and packet.withdrawn_doc_ids(claim["cutoff_date"]):
++            reason = "An eligible non-reliance notice withdraws the earlier report; no active matching replacement is available in this packet."
++    selected_ids = {f["fact_id"] for f in selected}
++    withdrawn = packet.withdrawn_doc_ids(claim["cutoff_date"])
++    return {
++        "label": label, "reason": reason, "rule": "P",
++        "claim_interval": [str(v) for v in claim_interval(claim)],
++        "evidence_intervals": [[str(v) for v in pair] for pair in bounds],
++        "selected_fact_ids": sorted(selected_ids),
++        "documents": [dict(d, eligible=eligible(d, claim["cutoff_date"]),
++                           withdrawn=d["doc_id"] in withdrawn)
++                      for d in packet.docs.values()],
++        "facts": [dict(f, selected=f["fact_id"] in selected_ids) for f in packet.facts],
++    }
++
++
+ def run_rule(rule, claim, documents, facts):
++    if rule not in RULES:
++        raise ValueError(f"Unknown rule {rule}")
++    if rule == "P":
++        return resolve_reference(claim, documents, facts)["label"]
+     packet = Packet(claim, documents, facts)
+     policy = claim["policy"]
+     cutoff = claim["cutoff_date"]
+@@ -122,8 +191,9 @@ def run_rule(rule, claim, documents, facts):
+     if rule == "B3":
+         return judge(intervals(packet.latest(packet.eligible_facts(cutoff))), claim)
+ 
+-    original = packet.by_role("original")
+-    corrected = packet.by_role("corrected")
++    eligible_facts = packet.eligible_facts(cutoff)
++    original = [f for f in eligible_facts if f["role"] == "original"]
++    corrected = [f for f in eligible_facts if f["role"] == "corrected"]
+     latest_eligible = packet.latest(packet.eligible_facts(cutoff))
+ 
+     if rule in ("B4", "B4W"):
+@@ -132,6 +202,9 @@ def run_rule(rule, claim, documents, facts):
+         if policy == "corrected_named":
+             return judge(intervals(corrected), claim)
+         if policy == "unspecified":
++            if rule == "B4W" and (not latest_eligible or any(
++                    f["doc_id"] in packet.withdrawn_doc_ids(cutoff) for f in latest_eligible)):
++                return "U"
+             return judge(intervals(original + latest_eligible), claim)
+         if policy == "as_known_packet":
+             if rule == "B4W":
+@@ -141,18 +214,6 @@ def run_rule(rule, claim, documents, facts):
+             return judge(intervals(latest_eligible), claim)
+         raise ValueError(f"Unknown policy {policy}")
+ 
+-    if rule == "P":
+-        if policy == "original_as_filed":
+-            return judge(intervals([f for f in original if eligible(packet.docs[f["doc_id"]], cutoff)]), claim)
+-        if policy == "corrected_named":
+-            return judge(intervals([f for f in corrected if eligible(packet.docs[f["doc_id"]], cutoff)]), claim)
+-        if policy == "as_known_packet":
+-            return judge(intervals(packet.active_facts(cutoff)), claim)
+-        if policy == "unspecified":
+-            interpretations = original + packet.active_facts(cutoff)
+-            return judge(intervals(interpretations), claim)
+-        raise ValueError(f"Unknown policy {policy}")
+-
+     raise ValueError(f"Unknown rule {rule}")
+ 
+ 
+diff --git a/deliverables/supervisor_demo_bundle.zip b/deliverables/supervisor_demo_bundle.zip
+new file mode 100644
+index 0000000000000000000000000000000000000000..8afe0c60a1eab6227bf00f6fbcbdb90e37363562
+GIT binary patch
+literal 16336
+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
+H*RTHv64msU
+
+literal 0
+HcmV?d00001
+
+diff --git a/docs/4_SUPERVISOR_DEMO.md b/docs/4_SUPERVISOR_DEMO.md
+new file mode 100644
+index 0000000..3c9c0c8
+--- /dev/null
++++ b/docs/4_SUPERVISOR_DEMO.md
+@@ -0,0 +1,66 @@
++# Supervisor demonstration: Disclosure Verifier
++
++Prepared 26 October 2026. This is a working **deterministic reference verifier** with a local browser interface. It is not a newly trained language model. It demonstrates the project's decision contract on prepared pilot facts while independent annotation review remains pending.
++
++## Run it on your laptop
++
++1. Download the repository branch containing this change using GitHub's **Code → Download ZIP**, then **Extract All**. Alternatively, extract the standalone `supervisor_demo_bundle.zip`.
++2. Open the extracted `code` folder and double-click **4_SUPERVISOR_DEMO.bat** on Windows. Keep its terminal open. A browser should open at `http://127.0.0.1:8765/`.
++3. If the browser does not open, copy that address into Chrome or Edge. If Python is not installed, install Python 3.11 or newer from https://www.python.org/downloads/ and enable **Add Python to PATH**. If Windows provides the Python launcher instead, open a terminal in `code` and run `py -3 supervisor_demo.py`.
++4. On macOS/Linux, open a terminal in `code` and run `python3 supervisor_demo.py`.
++5. If port 8765 is occupied, run `python supervisor_demo.py --port 8766` and use the address printed in the terminal.
++6. To stop, press Ctrl+C in the terminal. The demo runs locally; it is not a publicly deployed website.
++
++No `pip install`, API key, paid model, GPU or internet connection is required to run the verifier. Opening the external SEC source links does require internet. This package does not install Python for you or change your browser settings. The general `requirements.txt` applies to the other project scripts, not this demo.
++
++## What to show in five minutes
++
++Use the guided buttons in order. The first five use exactly the same prepared claim: **SunPower reported fiscal-2022 net income attributable to stockholders of USD 56.037 million.** The disclosure policy and cutoff supply its interpretation.
++
++| Button | Policy / cutoff | Reference output | What to explain |
++|---|---|---|---|
++| Original report | Original as filed; 2023-12-19 | S | The original named report disclosed this number. |
++| Corrected report | Corrected; 2023-12-19 | C | The later selected report discloses 42.849 million for this row. |
++| Before withdrawal | Active evidence; 2023-10-18 | S | The original is the active matching report in the eligible packet. |
++| Withdrawal gap | Active evidence; 2023-10-25 | U | The 8-K is eligible, but the replacement annual report is still future evidence. |
++| After replacement | Active evidence; 2023-12-19 | C | The replacement is now eligible and conflicts with the old amount. |
++| Rounding challenge | Separate exact-unrounded claim P018 | U | A rounded displayed amount does not establish exact underlying equality. |
++
++Scroll down to show the source links, official filing dates, excluded future documents and selected numerical facts. Explain that historical original-as-filed questions can establish what an old report said even after withdrawal. The active-authority question is different.
++
++The displayed simple control is B4W. It agrees with P on the guided examples. Do not claim a new algorithm or superior accuracy from the demonstration. The source facts and status links were prepared in advance; the software does not infer their validity from the original filing text.
++
++## Accurate progress statement for your supervisor
++
++> We have implemented a reference verifier for financial claims whose interpretation depends on disclosure version and a historical cutoff. The demo changes policy and cutoff for the same claim and displays the selected evidence and verdict. It currently uses 30 prepared pilot claims and provisional annotations. We have checked implementation behavior, including future-evidence exclusion, but have not independently validated benchmark accuracy or run a new trained model. The next step is student double-review of explicit source evidence, followed by a controlled LLM evaluation against the strong simple baseline.
++
++## Validation completed
++
++- Eleven automated checks passed, covering existing pilot-trace reproduction, unchanged saved automatic-rule outputs, future/same-day exclusion, both arithmetic operands, guided verdict changes, missing active interpretations, independence from draft answer labels, missing periods, selected-fact eligibility and invalid input.
++- Local HTTP checks returned 200 for S/C/U examples and 400 for an invalid cutoff date.
++- These are software/contract checks, not independent evidence that all 30 annotations are correct. The automatic dataset's labels remain generated by P.
++
++Run the checks in the full checkout with `python -m unittest discover -s code/tests -v`. The standalone demo bundle contains the lightweight demo runtime and pilot inputs; use the full repository for tests that also inspect the automatic dataset and historical result files.
++
++## What remains unresolved
++
++The previously identified automatic-data assumptions, inferred precision from trailing zeros, bare/full prompt confound and LLM resume-versioning issue are **not resolved by this demo**. It uses the prepared pilot facts. Do not use the existing bare/full comparison as evidence of temporal-reasoning failure until the experimental design is corrected. Do not call the automatic candidate families human-validated.
++
++The resolver expects normalized metrics, periods, units and preassigned original/corrected roles within a single issuer packet. It does not perform raw-document retrieval, accounting interpretation, currency conversion or arbitrary free-text claim parsing. More complex multi-version scope relationships need separate cases and validation.
++
++The day-level rule deliberately excludes documents filed on the cutoff day. It is a conservative evaluation convention, not a legal rule or exact reconstruction of public dissemination. Answers concern the supplied packet, not all information available to the market.
++
++## Work division and the publication decision
++
++I can help implement the pipeline, inspect public sources, maintain provenance, design experiments, analyze outputs and prepare drafts. Students remain responsible for understanding the work, running and explaining the demo, independently checking evidence, discussing scope with the supervisor, and taking responsibility for any submission. AI assistance and annotation provenance must be disclosed as required by the venue.
++
++A financial expert is not required to begin this narrowly defined pilot. Two trained students can independently inspect explicit rows, periods, units and correction notices. Record disagreement and prior exposure; leave genuine accounting ambiguities unresolved or exclude them. This is not expert validation.
++
++There is no defensible publication probability out of 100 from the current evidence. Acceptance depends on a verified literature gap, annotation reliability, meaningful evaluation, venue fit and review. Do not abandon the direction solely because the team lacks financial qualifications. Use these decision gates instead:
++
++1. Can two students consistently annotate the explicit evidence after calibration?
++2. Do the reviewed cases exercise a task not already adequately covered by the closest literature?
++3. Do controlled model comparisons yield an informative finding beyond compliance with a template, including a useful negative result if simple rules suffice?
++4. Does the supervisor agree that the validated scope fits the project timeline and a suitable venue?
++
++Do not add XAI, fraud detection or a new trained architecture just to increase apparent complexity. A benchmark/evaluation contribution remains a possibility, not a promise of publication.
+-- 
+2.52.0
+
