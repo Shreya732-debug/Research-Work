@@ -2,6 +2,8 @@
 
 Research proposal and source audits for **Financial Claims Under Revision: An As-of and Authority-Conditioned Verification Benchmark**.
 
+**For a short supervisor meeting:** [download the two-page illustrated brief](https://raw.githubusercontent.com/Shreya732-debug/Research-Work/main/supervisor_brief/professor_brief.pdf), covering the proposed gap, LLM role, engineering workflow and current progress. [Sources and editable version](supervisor_brief/README.md).
+
 ## Read or download
 
 | File | Contents |

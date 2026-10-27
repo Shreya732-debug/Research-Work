@@ -1,0 +1,127 @@
+SUPERVISOR BRIEF          /   ARTIFICIAL INTELLIGENCE + FINANCE
+
+
+
+Which financial number
+counts at which time?
+Time- and Version-Aware Financial Claim Verification
+
+    The project in 45 seconds
+    Companies sometimes correct numbers in their financial reports. A financial AI assistant must therefore
+    check more than whether a number appears in a document: it must use the right report version and the
+    information available at the requested date. We are building a verifier that returns supported, contradicted
+    or underdetermined, with cited evidence. We have a working rule-based prototype and 30 draft pilot cases.
+    Human review is underway; evaluating and integrating existing language models is the next planned stage.
+
+
+1. The problem, using one real company
+SunPower’s fiscal-2022 net income attributable to stockholders changed from $56.037 million to $42.849
+million in the selected reports. This is a specific statement row, not every measure of the company’s income.[1]
+
+                                                                       24 October 2023
+                10 March 2023                                                                                           18 December 2023
+                                                                      Non-reliance notice
+             Original annual report                                                                                    Amended annual report
+                                                                   Specified old statements
+                $56.037 million                                                                                           $42.849 million
+                                                                   should not be relied upon
+
+
+Figure 1. Official filing dates of the selected evidence. Fiscal period: 3 January 2022–1 January 2023.
+
+Claim: “SunPower reported stockholder-attributable income of $56.037 million for fiscal 2022.” The requested
+interpretation changes the verdict:
+
+What the question asks                                                         Verdict                    Why, within this evidence packet
+
+What did the original report say?                                              Supported                  The original report disclosed that amount.
+What do the corrected figures say?                                             Contradicted               The selected corrected amount is $42.849
+                                                                                                          million.
+What did active statements establish on 25 October                             Underdetermined            An eligible withdrawal exists; the selected
+2023?                                                                                                     replacement is still in the future.
+These are provisional interpretations under our explicit evaluation contract. The first two questions use a cutoff after the amendment. “Underdetermined” means the
+supplied evidence cannot settle the claim; it is not automatically a false claim.
+
+
+2. The specific research gap we are investigating
+Established prior work: FinGround says it defaults to the most recent filing when restated figures conflict.[2] Fin-
+VerBench describes discarding companies with source inconsistencies due to tagging variations or restatements.[3]
+Our proposed focus: construct and review paired cases that test whether a verifier follows the requested
+original/corrected version and historical cutoff, including a withdrawal before a replacement becomes available.
+Check the exact metric, period, units and evidence along with the answer.
+Honest novelty boundary: this is a literature-motivated candidate gap, not proof of a first-ever method. Temporal checking,
+financial verification and uncertainty already have prior work. Closest released benchmarks still need fuller inspection.
+
+
+
+
+B.Tech research brief • 27 October 2026 • Provisional research design                                                                                         1/2
+ENGINEERING PLAN         /   LLM ROLE, EVALUATION AND CURRENT PROGRESS
+
+
+3. What we will engineer, and where the AI fits
+An LLM (large language model) is a model that reads and generates language. We plan to use existing LLMs
+to interpret claims and extract evidence from reports. Explicit software checks then enforce the requested dates,
+versions and numerical consistency. This is the proposed combined system; the present demo starts from prepared
+facts.
+
+                          Input                                                  Why this is an AI engineering project
+         Claim + requested version + cutoff date                                 It combines document understanding, structured ev-
+            Selected financial-report evidence                                   idence extraction, temporal reasoning, a verification
+                                                                                 engine, a user interface and experimental evaluation in
+                                                                                 a financial-reporting domain. A useful AI engineering
+       LLM reading and extraction [planned]                                      contribution can integrate and evaluate existing mod-
+    Identify company, metric, period, amount, units                              els; training a new foundation model is not required.
+            and supporting source passages
+                                                                                 What the LLM adds
+                                                                                 It could reduce manual work in reading filings and
+      Explicit verification checks [prototype]                                   interpreting claims. Whether it does so accurately is
+  Exclude future evidence; apply version/withdrawal                              a research question, not a demonstrated benefit. Its
+     rules; check matched values and precision                                   extracted numbers and source links must be checked.
+                                                                                 The planned experiment
+            Output and trace [prototype]                                         Compare an LLM-only verifier, a strong rule-only
+     Supported / Contradicted / Underdetermined                                  control, and the combined system. Give each the
+    Source IDs and reasons for evidence selection                                same policy, cutoff and evidence information. Separate
+                                                                                 tests on prepared evidence from tests on actual source
+Figure 2. Proposed pipeline. The current demo supplies prepared facts directly
+                                                                                 excerpts.
+to the checks. The dashed stage has not yet been integrated or evaluated.
+                                                                                 Measure verdict correctness, future-evidence mis-
+                                                                                 takes, source-citation correctness and appropriate un-
+                                                                                 certainty. Use reviewed labels and report results by
+                                                                                 issuer; related claims are not independent replications.
+
+4. What is complete, and what comes next
+Status                What we can accurately report
+
+Implemented           Local browser demo on prepared pilot facts; policy/cutoff controls; verdict and source trace. Eleven software
+                      checks passed. These are not accuracy measurements.
+In progress           30 draft claims from five issuers and 11 SEC filings. R1 reports reviewing; six calibration cases are prepared.
+                      No completed human-review results have been recorded here.
+Next                  Finish calibration and separate student reviews; resolve or exclude ambiguities; freeze a reviewed pilot;
+                      correct the LLM evaluation design and run existing models.
+Not                   Independent model performance, superiority over a strong simple rule, a new algorithm, or publication-level
+established           novelty. Broader data screening remains pending.
+
+Proposed contribution: a reviewed evaluation set and an evidence-linked verifier showing when disclosure version
+and historical availability matter. The current simple withdrawal-aware rule matches the reference resolver on the
+draft cases; that limits any algorithmic-superiority claim.[4]
+What we need from the supervisor: agreement on the scope and expected AI implementation depth, feedback on
+the evaluation design and a review of unresolved cases. Two calibrated students can check explicit filing evidence;
+difficult accounting interpretations remain unresolved or are excluded. We will not claim expert validation.
+
+Selected evidence and references.
+[1] SunPower Corporation. SEC filings: 2022 Form 10-K; 24 Oct. 2023 Form 8-K, Item 4.02; 2022 Form 10-K/A, Note 2. Source packet inspected 26
+Oct. 2026; official filing dates and provenance recorded in the pilot.
+[2] D. Guo, J. Wu and S. M. Yiu (2026). FinGround: Detecting and Grounding Financial Hallucinations via Atomic Claim Verification. arXiv:2604.23588v1,
+Section 3.3. Preprint; relevant full-text passage rechecked online 27 Oct. 2026.
+[3] S. Panda (2026). FinVerBench: Benchmark Validity and Calibration in Large Language Model Financial Statement Verification. arXiv:2605.29586v1,
+data-construction passage. Preprint; relevant full text rechecked online 27 Oct. 2026.
+
+[4] Project records: pilot assessment; calibration pack; supervisor demo and validation walkthrough. Internal artifacts, not peer-reviewed findings.
+
+
+
+
+B.Tech research brief • 27 October 2026 • Provisional research design                                                                                  2/2
+
